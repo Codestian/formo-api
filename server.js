@@ -1,15 +1,18 @@
 const express = require("express");
+const dotenv = require("dotenv");
 const pgp = require("pg-promise")();
 
 const app = express();
-const port = 3000;
+const port = process.env.API_PORT;
+
+dotenv.config();
 
 const config = {
-  host: "localhost",
-  port: 5432,
-  database: "postgres",
-  user: "postgres",
-  password: "Kisumi12!",
+  host: process.env.DB_HOST,
+  port: process.env.DB_PORT,
+  database: process.env.DB_DATABASE,
+  user: process.env.DB_USER,
+  password: process.env.DB_PASSWORD,
 };
 
 const db = pgp(config);
@@ -47,8 +50,31 @@ app.post("/notes", async (req, res) => {
 
 // READ
 app.get("/notes", async (req, res) => {
+  let searchQuery = "";
+  let sortQuery = "asc";
+
+  // TODO PREVENT SQL INJECTION BY CHECKING SPECIAL CHARACTERS IN URL
+
+  // CHECK IF CLIENT HAS SEARCH QUERY, THEN RETURNS NOTES WITH TITLE MATCHING QUERY.
+  if (req.query.search) {
+    searchQuery = req.query.search;
+  }
+
+  // CHECKS IF CLIENT HAS SORT QUERY, THEN SORTS THE NOTES EITHER BY ASCENDING OR DESCENDING ORDER.
+  if (req.query.sort === "desc" || req.query.sort === "asc") {
+    sortQuery = req.query.sort;
+  } else if (req.query.sort) {
+    return res.status(400).send({
+      status: "error",
+      message: "Sort parameter query must either be 'desc' or 'asc'",
+    });
+  }
+
   try {
-    data = await db.any("SELECT * FROM db_formo.notes", [true]);
+    data = await db.any(
+      `SELECT * FROM db_formo.notes WHERE LOWER ( title ) LIKE '%${searchQuery}%' ORDER BY updated_at ${sortQuery}`,
+      [true]
+    );
     res.send({
       status: "success",
       message: data,
@@ -120,10 +146,9 @@ app.put("/notes/:id(\\d+)/", async (req, res) => {
 // DELETE
 app.delete("/notes/:id(\\d+)/", async (req, res) => {
   try {
-    data = await db.none(
-      "DELETE FROM db_formo.notes WHERE id=$1",
-      [req.params.id]
-    );
+    data = await db.none("DELETE FROM db_formo.notes WHERE id=$1", [
+      req.params.id,
+    ]);
 
     res.send({
       status: "success",
